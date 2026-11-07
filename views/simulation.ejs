@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title><%= typeof title !== 'undefined' ? title : 'VLE Simulation' %></title>
+<style>
+:root{--bg:#f2f5f6;--fg:#14262b;--mut:#5b6e73;--card:#fff;--line:#d3dde0;--liq:#1f6fb5;--vap:#d9731a;--acc:#0d7a6f;--flame:#e8590c;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a1d;--fg:#e4eef0;--mut:#8aa0a5;--card:#16262a;--line:#27393e;--liq:#4a9be0;--vap:#f2994a;--acc:#34c4b3}}
+:root[data-theme="dark"]{--bg:#0f1a1d;--fg:#e4eef0;--mut:#8aa0a5;--card:#16262a;--line:#27393e;--liq:#4a9be0;--vap:#f2994a;--acc:#34c4b3}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "Trebuchet MS",Verdana,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.5rem;margin:0 0 4px;letter-spacing:-.01em}
+p.sub{margin:0 0 16px;color:var(--mut);max-width:62ch}
+.ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 18px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.ctl label{display:flex;flex-direction:column;gap:4px;font-size:.88rem;color:var(--mut)}
+.ctl b{color:var(--fg);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--acc)}
+select,button{font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+.btns{display:flex;gap:8px;align-items:end}
+button{cursor:pointer}button.go{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;margin-top:14px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+canvas{width:100%;height:340px;display:block}
+.vessel{display:flex;gap:10px;align-items:center}
+.vessel svg{width:46%;max-width:190px;flex:none}
+.read{flex:1;font-size:.92rem}
+.read div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0}
+.read span{color:var(--mut)}
+.state{margin:10px 0 0;font-weight:600;color:var(--acc)}
+.bars{margin-top:10px;font-size:.85rem}
+.bar{display:grid;grid-template-columns:78px 1fr 44px;gap:8px;align-items:center;margin:4px 0}
+.bar i{display:block;height:10px;border-radius:5px;background:var(--line);overflow:hidden}
+.bar i u{display:block;height:100%;background:var(--liq);width:0;text-decoration:none}
+.bar.v i u{background:var(--vap)}
+.note{color:var(--mut);font-size:.85rem;margin-top:12px;max-width:80ch}
+</style>
+</head>
+<body>
+<main>
+<h1>Heat a binary mixture and watch it split</h1>
+<p class="sub">Raise the temperature at constant pressure. The flask and the T-x-y diagram show the same moment: when the first bubble forms, how liquid and vapor compositions differ, and when the last drop vanishes.</p>
+
+<section class="ctl" aria-label="Controls">
+<label>Mixture
+<select id="sys"><option value="bt">Benzene – toluene (ideal)</option><option value="ew">Ethanol – water (azeotrope)</option></select></label>
+<label><span>Feed composition z₁: <b id="zv"></b></span><input id="z" type="range" min="0.05" max="0.95" step="0.01" value="0.5"></label>
+<label><span>Pressure: <b id="pv"></b> mmHg</span><input id="P" type="range" min="400" max="1500" step="10" value="760"></label>
+<label><span>Temperature: <b id="tv"></b> °C</span><input id="T" type="range" min="50" max="130" step="0.1" value="60"></label>
+<div class="btns"><button class="go" id="heat">Heat</button><button id="reset">Reset</button></div>
+</section>
+
+<div class="grid">
+<div class="card"><canvas id="cv" role="img" aria-label="T-x-y diagram with the current tie line"></canvas></div>
+<div class="card">
+<div class="vessel">
+<svg viewBox="0 0 200 250" aria-hidden="true">
+<rect id="vapor" x="40" y="20" width="120" height="170" rx="14" fill="var(--vap)" opacity=".08"/>
+<clipPath id="fl"><rect x="40" y="20" width="120" height="170" rx="14"/></clipPath>
+<g clip-path="url(#fl)"><rect id="liq" x="40" y="190" width="120" height="0" fill="var(--liq)" opacity=".55"/><g id="bub" fill="none" stroke="#fff" stroke-width="1.5" opacity=".85"></g></g>
+<rect x="40" y="20" width="120" height="170" rx="14" fill="none" stroke="var(--fg)" stroke-width="3"/>
+<rect x="30" y="196" width="140" height="10" rx="3" fill="var(--mut)"/>
+<path id="flame" d="M100 246 C80 230 90 218 100 208 C110 218 120 230 100 246Z" fill="var(--flame)" opacity="0"/>
+</svg>
+<div class="read">
+<div><span>Temperature</span><b id="rT"></b></div>
+<div><span>Vapor fraction V/F</span><b id="rV"></b></div>
+<div><span>Liquid x₁</span><b id="rx"></b></div>
+<div><span>Vapor y₁</span><b id="ry"></b></div>
+<div><span>Bubble / dew point</span><b id="rB"></b></div>
+</div></div>
+<p class="state" id="state"></p>
+<div class="bars">
+<div class="bar"><span>Feed z₁</span><i><u id="bz"></u></i><b id="tz"></b></div>
+<div class="bar"><span>Liquid x₁</span><i><u id="bx"></u></i><b id="tx"></b></div>
+<div class="bar v"><span>Vapor y₁</span><i><u id="by"></u></i><b id="ty"></b></div>
+</div></div>
+</div>
+<p class="note">Component 1 is the first-named species. Phase fractions come from the lever rule, V/F = (z − x)/(y − x). The ethanol–water curve uses a two-parameter Margules model with approximate parameters, so treat the azeotrope position as illustrative.</p>
+
+<details class="card" style="margin-top:14px" open>
+<summary style="cursor:pointer;font-weight:600">New to VLE? Read this first</summary>
+<p class="note"><b>VLE (vapor-liquid equilibrium)</b> tells you, for a liquid mixture of two components at a given pressure, at what temperature it starts to boil and how the liquid and vapor compositions differ.</p>
+<ul class="note">
+<li><b>Mixture:</b> which two chemicals are mixed. Benzene–toluene behaves ideally. Ethanol–water forms an azeotrope, a point where liquid and vapor have the same composition.</li>
+<li><b>Feed composition z₁:</b> mole fraction of component 1 in the mixture you start with.</li>
+<li><b>Pressure:</b> held constant while heating.</li>
+<li><b>Temperature:</b> drag the slider or press Heat. Below the bubble point it is all liquid, between bubble and dew point both phases exist, above the dew point it is all vapor.</li>
+<li><b>Outputs:</b> x₁ (liquid composition), y₁ (vapor composition), V/F (fraction of the feed that is vapor).</li>
+</ul>
+</details>
+</main>
+<script>
+const ANT={benzene:[6.90565,1211.033,220.79],toluene:[6.95464,1344.8,219.482],ethanol:[8.20417,1642.89,230.3],water:[8.07131,1730.63,233.426]};
+const ps=(c,T)=>10**(ANT[c][0]-ANT[c][1]/(T+ANT[c][2]));
+const marg=(a,b)=>x=>{const y=1-x;return[Math.exp(y*y*(a+2*(b-a)*x)),Math.exp(x*x*(b+2*(a-b)*y))]};
+const SYS={bt:{c:["benzene","toluene"],g:()=>[1,1],lab:"Benzene–toluene"},ew:{c:["ethanol","water"],g:marg(1.6022,0.7947),lab:"Ethanol–water"}};
+function bis(f,lo,hi){let fl=f(lo);for(let i=0;i<80;i++){const m=(lo+hi)/2,fm=f(m);if(fl*fm<=0)hi=m;else{lo=m;fl=fm}}return(lo+hi)/2}
+function bub(x,s,P){const[g1,g2]=s.g(x);const f=T=>x*g1*ps(s.c[0],T)+(1-x)*g2*ps(s.c[1],T)-P;const T=bis(f,0,200);return[T,x*g1*ps(s.c[0],T)/P]}
+function cross(A,t,i0,i1){for(let i=i0;i<i1;i++){const a=A[i]-t,b=A[i+1]-t;if(a===0)return i;if(a*b<0)return i+(0-a)/(b-a)}return A[i1]===t?i1:null}
+const val=(A,f)=>{const i=Math.min(Math.floor(f),A.length-2),u=f-i;return A[i]*(1-u)+A[i+1]*u};
+const $=id=>document.getElementById(id),N=200;
+let S={X:[],Y:[],Tc:[],i0:0,i1:N,az:-1,heating:false,T:60,lo:50,hi:130};
+
+function build(){
+ const s=SYS[$("sys").value],P=+$("P").value;S.X=[];S.Y=[];S.Tc=[];
+ for(let i=0;i<=N;i++){const x=i/N,[T,y]=bub(x,s,P);S.X.push(x);S.Y.push(y);S.Tc.push(T)}
+ S.az=-1;for(let i=2;i<N-1;i++){const a=S.Y[i]-S.X[i],b=S.Y[i+1]-S.X[i+1];if(a*b<0){S.az=i+1;break}}
+ const z=+$("z").value;
+ if(S.az>0){if(z<S.X[S.az]){S.i0=0;S.i1=S.az}else{S.i0=S.az;S.i1=N}}else{S.i0=0;S.i1=N}
+ const fb=cross(S.X,z,S.i0,S.i1),fd=cross(S.Y,z,S.i0,S.i1);
+ S.Tb=fb==null?S.Tc[S.az]:val(S.Tc,fb);S.Td=fd==null?S.Tc[S.az]:val(S.Tc,fd);
+ if(S.Tb>S.Td)[S.Tb,S.Td]=[S.Td,S.Tb];
+ S.lo=Math.floor(S.Tb-12);S.hi=Math.ceil(S.Td+12);
+ const t=$("T");t.min=S.lo;t.max=S.hi;S.T=Math.min(Math.max(S.T,S.lo),S.hi);t.value=S.T;
+}
+function solve(){
+ const z=+$("z").value,T=S.T;let x=z,y=z,V=0,st;
+ if(T<=S.Tb){st="Single phase: subcooled liquid. Keep heating to reach the bubble point."}
+ else if(T>=S.Td){V=1;st="Single phase: superheated vapor. Every drop has evaporated.";x=null}
+ else{const f=cross(S.Tc,T,S.i0,S.i1);if(f!=null){x=val(S.X,f);y=val(S.Y,f)}
+  V=Math.max(0,Math.min(1,(z-x)/(y-x||1)));st="Two phases coexist. The vapor is richer in "+(y>x?"component 1":"component 2")+" than the liquid."}
+ return{x,y,V,st,z};
+}
+const cvs=$("cv"),ctx=cvs.getContext("2d"),css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function draw(r){
+ const dpr=window.devicePixelRatio||1,W=cvs.clientWidth,H=cvs.clientHeight;
+ if(cvs.width!==W*dpr){cvs.width=W*dpr;cvs.height=H*dpr}
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+ const m={l:46,r:12,t:14,b:36},w=W-m.l-m.r,h=H-m.t-m.b;
+ const tmin=Math.min(...S.Tc)-6,tmax=Math.max(...S.Tc)+6;
+ const X=x=>m.l+x*w,Y=t=>m.t+(1-(t-tmin)/(tmax-tmin))*h;
+ const fg=css("--fg"),mut=css("--mut"),line=css("--line"),liq=css("--liq"),vap=css("--vap"),acc=css("--acc");
+ ctx.font="12px Verdana,sans-serif";ctx.lineWidth=1;ctx.strokeStyle=line;ctx.fillStyle=mut;
+ for(let k=0;k<=5;k++){const t=tmin+(tmax-tmin)*k/5;ctx.beginPath();ctx.moveTo(m.l,Y(t));ctx.lineTo(m.l+w,Y(t));ctx.stroke();ctx.textAlign="right";ctx.fillText(t.toFixed(0),m.l-6,Y(t)+4)}
+ for(let k=0;k<=5;k++){const x=k/5;ctx.textAlign="center";ctx.fillText(x.toFixed(1),X(x),H-m.b+16)}
+ ctx.fillText("x₁, y₁ (mole fraction of component 1)",m.l+w/2,H-4);
+ ctx.save();ctx.translate(12,m.t+h/2);ctx.rotate(-Math.PI/2);ctx.fillText("T (°C)",0,0);ctx.restore();
+ const path=(A,c)=>{ctx.beginPath();ctx.lineWidth=2.5;ctx.strokeStyle=c;A.forEach((a,i)=>{const px=X(a),py=Y(S.Tc[i]);i?ctx.lineTo(px,py):ctx.moveTo(px,py)});ctx.stroke()};
+ path(S.X,liq);path(S.Y,vap);
+ ctx.textAlign="left";ctx.fillStyle=liq;ctx.fillText("bubble curve (liquid)",X(.03),Y(tmin+(tmax-tmin)*.1));
+ ctx.fillStyle=vap;ctx.fillText("dew curve (vapor)",X(.55),Y(tmax-(tmax-tmin)*.06));
+ ctx.fillStyle=mut;ctx.fillText("liquid",X(.02),Y(tmin+(tmax-tmin)*.03));ctx.fillText("vapor",X(.86),Y(tmax-(tmax-tmin)*.02));
+ ctx.setLineDash([4,4]);ctx.strokeStyle=mut;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(X(r.z),Y(tmin));ctx.lineTo(X(r.z),Y(tmax));ctx.stroke();
+ ctx.setLineDash([]);
+ const ty=Y(S.T);ctx.strokeStyle=acc;ctx.lineWidth=2;
+ if(r.x!=null&&r.V>0&&r.V<1){ctx.beginPath();ctx.moveTo(X(r.x),ty);ctx.lineTo(X(r.y),ty);ctx.stroke();
+  [[r.x,liq],[r.y,vap]].forEach(([v,c])=>{ctx.fillStyle=c;ctx.beginPath();ctx.arc(X(v),ty,6,0,7);ctx.fill()})}
+ else{ctx.setLineDash([6,5]);ctx.beginPath();ctx.moveTo(m.l,ty);ctx.lineTo(m.l+w,ty);ctx.stroke();ctx.setLineDash([])}
+ ctx.fillStyle=fg;ctx.save();ctx.translate(X(r.z),ty);ctx.rotate(Math.PI/4);ctx.fillRect(-5,-5,10,10);ctx.restore();
+ if(S.az>0){ctx.fillStyle=mut;ctx.textAlign="center";ctx.fillText("azeotrope",X(S.X[S.az]),Y(S.Tc[S.az])+18)}
+}
+const bubs=[...Array(14)].map((_,i)=>({x:52+Math.random()*96,y:190-Math.random()*60,r:2+Math.random()*3,s:.4+Math.random()*.8}));
+const bg=$("bub");bubs.forEach(b=>{b.el=document.createElementNS("http://www.w3.org/2000/svg","circle");bg.appendChild(b.el)});
+function fmt(v,d=3){return v==null?"–":v.toFixed(d)}
+function render(){
+ const r=solve(),z=r.z;
+ $("zv").textContent=z.toFixed(2);$("pv").textContent=$("P").value;$("tv").textContent=S.T.toFixed(1);$("T").value=S.T;
+ $("rT").textContent=S.T.toFixed(1)+" °C";$("rV").textContent=fmt(r.V);
+ $("rx").textContent=r.V>=1?"–":fmt(r.x);$("ry").textContent=r.V<=0?"–":fmt(r.y);
+ $("rB").textContent=S.Tb.toFixed(1)+" / "+S.Td.toFixed(1)+" °C";$("state").textContent=r.st;
+ const set=(b,t,v)=>{$(b).style.width=(v==null?0:v*100)+"%";$(t).textContent=v==null?"–":v.toFixed(2)};
+ set("bz","tz",z);set("bx","tx",r.V>=1?null:r.x);set("by","ty",r.V<=0?null:r.y);
+ const hL=(1-r.V)*168;$("liq").setAttribute("y",190-hL);$("liq").setAttribute("height",hL);
+ $("vapor").setAttribute("opacity",.06+.4*r.V);$("flame").setAttribute("opacity",S.heating?.9:0);
+ S.cur={r,hL};draw(r);
+}
+let last=performance.now();
+function loop(t){
+ const dt=Math.min(.05,(t-last)/1000);last=t;
+ if(S.heating){S.T+=dt*(S.hi-S.lo)/22;if(S.T>=S.hi){S.T=S.hi;S.heating=false;$("heat").textContent="Heat"}render()}
+ const c=S.cur;if(c){const on=c.r.V>.003&&c.r.V<.999,surf=190-c.hL;
+  bubs.forEach((b,i)=>{if(!on){b.el.setAttribute("r",0);return}b.y-=b.s*(1+c.r.V*2);if(b.y<surf||b.y>188){b.y=188;b.x=52+Math.random()*96}
+   b.el.setAttribute("cx",b.x);b.el.setAttribute("cy",b.y);b.el.setAttribute("r",i<3+c.r.V*11?b.r:0)})}
+ requestAnimationFrame(loop);
+}
+$("heat").onclick=()=>{if(S.T>=S.hi)S.T=S.lo;S.heating=!S.heating;$("heat").textContent=S.heating?"Pause":"Heat"};
+$("reset").onclick=()=>{S.heating=false;$("heat").textContent="Heat";S.T=S.lo;render()};
+$("T").oninput=e=>{S.heating=false;$("heat").textContent="Heat";S.T=+e.target.value;render()};
+["sys","z","P"].forEach(id=>$(id).oninput=()=>{build();render()});
+window.addEventListener("resize",()=>S.cur&&draw(S.cur.r));
+build();S.T=S.lo;render();requestAnimationFrame(loop);
+</script>
+</body>
+</html>

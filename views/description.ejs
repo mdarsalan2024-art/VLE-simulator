@@ -1,0 +1,197 @@
+<%
+  const steps = [
+    { n: 1, title: 'Find the bubble point', body: 'For each liquid composition <i>x<sub>1</sub></i> from 0 to 1, the simulator uses bisection to find the temperature where the partial pressures sum to the system pressure (<i>Σ y<sub>i</sub> = 1</i>). It then calculates <i>y<sub>1</sub></i>. Repeating this across the composition range traces the bubble (liquid) and dew (vapor) curves.' },
+    { n: 2, title: 'Determine the phases', body: 'For feed composition <i>z<sub>1</sub></i>, the simulator compares the current temperature with the bubble and dew points. Between them, a tie line gives liquid composition <i>x</i> and vapor composition <i>y</i>; the lever rule then gives the vapor fraction.', lever: true },
+    { n: 3, title: 'Handle azeotropes', body: 'In non-ideal systems, the simulator detects where vapor and liquid compositions meet (<i>x = y</i>) and treats each side of the azeotrope separately. This keeps phase calculations well behaved where the curves touch.' },
+    { n: 4, title: 'Watch the visualization', body: 'As the state changes, the flask’s liquid level falls, bubbles rise, and the vapor tint deepens. On the T–x–y diagram, a tie line marks the current temperature, with markers for the liquid, vapor, and feed compositions.' }
+  ];
+  const regions = [
+    { t: 'Above the dew point', h: 'Vapor', p: 'The mixture has become a single-phase vapor.', c: 'border-[#c8741a] bg-[#fbeedd]' },
+    { t: 'Between bubble and dew point', h: 'Liquid + vapor', p: 'Both phases coexist; the tie line and lever rule describe their compositions and proportions.', c: 'border-[#6f8f99] bg-[#e4edef]' },
+    { t: 'Below the bubble point', h: 'Liquid', p: 'The mixture is a single-phase liquid.', c: 'border-[#1b6a8f] bg-[#d9eaf2]' }
+  ];
+  const controls = [
+    'Choose benzene–toluene or ethanol–water.',
+    'Set the feed composition <i>z<sub>1</sub></i> and system pressure.',
+    'Heat automatically or drag the temperature slider manually.',
+    'Reset to the starting state whenever you want to compare.'
+  ];
+  const concepts = ['Raoult’s law', 'Dalton’s law', 'Antoine equation', 'Activity coefficients', 'Bubble & dew points', 'Tie lines', 'Lever rule', 'Relative volatility', 'Azeotropes'];
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#10212e">
+    <title>How the VLE Simulator Works | VLE Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/output.css">
+    <style>
+        .font-display { font-family: 'Bricolage Grotesque', system-ui, sans-serif; }
+        .font-body { font-family: 'Source Sans 3', system-ui, sans-serif; }
+        .graph-paper {
+            background-color: #eef3f3;
+            background-image:
+                linear-gradient(to right, rgb(16 33 46 / .06) 1px, transparent 1px),
+                linear-gradient(to bottom, rgb(16 33 46 / .06) 1px, transparent 1px);
+            background-size: 28px 28px;
+        }
+        i { font-family: 'Source Sans 3', serif; font-style: italic; color: #10212e; }
+        :focus-visible { outline: 3px solid #c8741a; outline-offset: 3px; }
+    </style>
+</head>
+<body class="graph-paper font-body min-h-screen text-[#25384a] antialiased">
+    <header class="sticky top-0 z-10 border-b border-[#10212e]/15 bg-[#eef3f3]/90 backdrop-blur">
+        <div class="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-8">
+            <a href="/" class="font-display text-xl font-extrabold tracking-tight text-[#10212e]">VLE Lab</a>
+            <nav aria-label="Main navigation" class="flex items-center gap-5 text-[15px] font-semibold">
+                <a href="/" class="text-[#25384a] hover:text-[#1b6a8f]">Home</a>
+                <a href="/simulation" class="rounded-md bg-[#10212e] px-4 py-2 text-white hover:bg-[#1b6a8f]">Open simulator</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
+        <!-- Hero: headline beside a live-style T–x–y sketch -->
+        <section class="grid items-center gap-10 py-14 sm:py-20 lg:grid-cols-[1.1fr_0.9fr]">
+            <div>
+                <h1 class="font-display text-5xl font-extrabold leading-[1.02] tracking-tight text-[#10212e] sm:text-6xl lg:text-7xl">Inside vapor–liquid equilibrium</h1>
+                <p class="mt-6 max-w-xl text-xl leading-8">See how composition and temperature shape a boiling mixture—and how those changes explain the science behind distillation.</p>
+                <a href="/simulation" class="mt-8 inline-block rounded-md bg-[#c8741a] px-6 py-3.5 text-base font-bold text-[#10212e] hover:bg-[#e08a2c]">Explore the simulator</a>
+            </div>
+            <figure class="rounded-xl border border-[#10212e]/20 bg-white p-4 shadow-[6px_6px_0_#10212e]">
+                <svg viewBox="0 0 360 290" role="img" aria-label="Temperature versus composition diagram: a bubble curve below a dew curve, with a horizontal tie line between them" class="h-auto w-full">
+                    <path d="M40 20V250H335" fill="none" stroke="#10212e" stroke-width="1.5"/>
+                    <path d="M40 70C140 150 250 195 330 215" fill="none" stroke="#1b6a8f" stroke-width="3"/>
+                    <path d="M40 70C100 90 210 130 330 215" fill="none" stroke="#c8741a" stroke-width="3"/>
+                    <path d="M147 141H203" stroke="#10212e" stroke-width="1.5" stroke-dasharray="4 3"/>
+                    <circle cx="147" cy="141" r="5" fill="#1b6a8f"/><circle cx="203" cy="141" r="5" fill="#c8741a"/>
+                    <path d="M175 141V250" stroke="#10212e" stroke-width="1" stroke-dasharray="2 3"/>
+                    <g font-family="Source Sans 3, sans-serif" font-size="13" fill="#10212e">
+                        <text x="52" y="168" fill="#1b6a8f" font-weight="600">Bubble curve</text>
+                        <text x="214" y="112" fill="#a35c10" font-weight="600">Dew curve</text>
+                        <text x="108" y="132" text-anchor="end">x</text><text x="214" y="136">y</text>
+                        <text x="175" y="268" text-anchor="middle">z</text>
+                        <text x="187" y="282" text-anchor="middle" font-style="italic">Liquid composition, x₁ →</text>
+                        <text x="14" y="140" transform="rotate(-90 14 140)" text-anchor="middle" font-style="italic">Temperature</text>
+                    </g>
+                </svg>
+                <figcaption class="mt-1 px-1 text-sm text-[#4a5d6b]">A tie line joins the liquid (x) and vapor (y) compositions at one temperature.</figcaption>
+            </figure>
+        </section>
+
+        <!-- Overview -->
+        <section class="max-w-3xl border-l-4 border-[#1b6a8f] pl-6 sm:pl-8" aria-labelledby="overview-heading">
+            <h2 id="overview-heading" class="font-display text-3xl font-bold tracking-tight text-[#10212e] sm:text-4xl">One mixture, two phases, one connected view</h2>
+            <p class="mt-4 text-lg leading-8">The VLE (vapor–liquid equilibrium) simulator shows how a binary liquid mixture behaves as it is heated at constant pressure. At equilibrium, the vapor above a boiling mixture has a different composition from the liquid it came from—which is the principle that makes distillation work. A live flask animation and a T–x–y phase diagram update together, connecting the physical behavior to the thermodynamics.</p>
+        </section>
+
+        <!-- Model -->
+        <section class="mt-20" aria-labelledby="model-heading">
+            <h2 id="model-heading" class="font-display text-4xl font-extrabold tracking-tight text-[#10212e] sm:text-5xl">How the model works</h2>
+            <p class="mt-3 max-w-2xl text-lg leading-8">The simulator calculates the equilibrium state, locates phase boundaries, and then turns the result into a picture you can explore.</p>
+
+            <article class="mt-8 overflow-hidden rounded-xl bg-[#10212e] text-white">
+                <div class="grid gap-6 p-6 sm:p-8 md:grid-cols-[1fr_1.2fr] md:items-center">
+                    <div>
+                        <h3 class="font-display text-2xl font-bold">Modified Raoult’s law</h3>
+                        <p class="mt-3 text-lg leading-7 text-slate-200">For each component, its partial pressure in the vapor matches its liquid-phase contribution at equilibrium.</p>
+                    </div>
+                    <div class="rounded-lg border border-white/20 px-5 py-7 text-center text-2xl text-[#ffd9a1] sm:text-3xl">
+                        <math display="block" aria-label="y sub i times P equals x sub i times gamma sub i times P sub i saturated of T">
+                            <mrow>
+                                <msub><mi>y</mi><mi>i</mi></msub><mo>⁢</mo><mi>P</mi><mo>=</mo>
+                                <msub><mi>x</mi><mi>i</mi></msub><mo>⁢</mo>
+                                <msub><mi>γ</mi><mi>i</mi></msub><mo>⁢</mo>
+                                <msubsup><mi>P</mi><mi>i</mi><mi mathvariant="normal">sat</mi></msubsup>
+                                <mo>(</mo><mi>T</mi><mo>)</mo>
+                            </mrow>
+                        </math>
+                    </div>
+                </div>
+                <dl class="grid gap-x-8 gap-y-4 border-t border-white/15 px-6 py-6 text-base leading-7 text-slate-200 sm:grid-cols-2 sm:px-8 lg:grid-cols-4">
+                    <div><dt class="font-semibold text-[#ffd9a1]"><i class="!text-[#ffd9a1]">x<sub>i</sub>, y<sub>i</sub></i></dt><dd>Liquid and vapor mole fractions</dd></div>
+                    <div><dt class="font-semibold text-[#ffd9a1]"><i class="!text-[#ffd9a1]">P</i></dt><dd>Total system pressure</dd></div>
+                    <div><dt class="font-semibold text-[#ffd9a1]"><i class="!text-[#ffd9a1]">P<sub>i</sub><sup>sat</sup>(T)</i></dt><dd>Pure-component vapor pressure from the Antoine equation</dd></div>
+                    <div><dt class="font-semibold text-[#ffd9a1]"><i class="!text-[#ffd9a1]">γ<sub>i</sub></i></dt><dd>Activity coefficient; 1 for an ideal mixture, or calculated with a Margules model</dd></div>
+                </dl>
+            </article>
+
+            <!-- The calculation is a real sequence, so these are numbered -->
+            <ol class="mt-10 space-y-0 border-l-2 border-[#10212e]/25">
+                <% steps.forEach(function (s) { %>
+                <li class="relative pb-9 pl-8 last:pb-0 sm:pl-10">
+                    <span class="absolute -left-[17px] top-0 grid size-8 place-items-center rounded-full bg-[#10212e] text-sm font-bold text-white" aria-hidden="true"><%= s.n %></span>
+                    <h3 class="font-display text-2xl font-bold text-[#10212e]"><%= s.title %></h3>
+                    <p class="mt-2 max-w-3xl text-lg leading-8"><%- s.body %></p>
+                    <% if (s.lever) { %>
+                    <div class="mt-4 inline-block rounded-lg border border-[#10212e]/20 bg-white px-8 py-4 text-2xl text-[#10212e]" role="img" aria-label="V over F equals z minus x over y minus x">
+                        <math display="block">
+                            <mrow>
+                                <mfrac><mi>V</mi><mi>F</mi></mfrac><mo>=</mo>
+                                <mfrac><mrow><mi>z</mi><mo>−</mo><mi>x</mi></mrow><mrow><mi>y</mi><mo>−</mo><mi>x</mi></mrow></mfrac>
+                            </mrow>
+                        </math>
+                    </div>
+                    <% } %>
+                </li>
+                <% }) %>
+            </ol>
+        </section>
+
+        <!-- Phase regions, drawn top to bottom in the same order as temperature on the diagram -->
+        <section class="mt-20" aria-labelledby="phases-heading">
+            <h2 id="phases-heading" class="font-display text-4xl font-extrabold tracking-tight text-[#10212e] sm:text-5xl">Three regions of the phase diagram</h2>
+            <p class="mt-3 max-w-2xl text-lg leading-8">Stacked from hottest to coolest, just as they appear on the temperature axis.</p>
+            <div class="mt-8 overflow-hidden rounded-xl border border-[#10212e]/20 bg-white">
+                <% regions.forEach(function (r, i) { %>
+                <article class="grid gap-1 border-l-[10px] px-6 py-5 sm:grid-cols-[14rem_1fr] sm:gap-6 sm:items-baseline <%= r.c %> <%= i ? 'border-t border-t-[#10212e]/15' : '' %>">
+                    <div>
+                        <p class="text-sm font-semibold text-[#4a5d6b]"><%= r.t %></p>
+                        <h3 class="font-display text-2xl font-bold text-[#10212e]"><%= r.h %></h3>
+                    </div>
+                    <p class="text-lg leading-7"><%= r.p %></p>
+                </article>
+                <% }) %>
+            </div>
+        </section>
+
+        <!-- Controls + concepts -->
+        <section class="mt-20 grid gap-12 lg:grid-cols-2" aria-label="Simulator controls and concepts">
+            <div>
+                <h2 class="font-display text-3xl font-bold tracking-tight text-[#10212e]">Try the controls</h2>
+                <ul class="mt-5 space-y-3 text-lg leading-7">
+                    <% controls.forEach(function (c) { %>
+                    <li class="flex gap-3"><span class="mt-0.5 font-bold text-[#1b6a8f]" aria-hidden="true">✓</span><span><%- c %></span></li>
+                    <% }) %>
+                </ul>
+            </div>
+            <div>
+                <h2 class="font-display text-3xl font-bold tracking-tight text-[#10212e]">Key concepts</h2>
+                <p class="mt-3 text-lg leading-7">Use the live readouts and composition bars to connect the diagram to:</p>
+                <ul class="mt-5 flex flex-wrap gap-x-2 gap-y-2.5">
+                    <% concepts.forEach(function (c) { %>
+                    <li class="rounded-md border border-[#10212e]/25 bg-white px-3 py-1.5 text-base font-semibold text-[#10212e]"><%= c %></li>
+                    <% }) %>
+                </ul>
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="mt-20 flex flex-col items-start justify-between gap-6 rounded-xl bg-[#10212e] p-7 text-white sm:flex-row sm:items-center sm:p-10">
+            <div>
+                <h2 class="font-display text-3xl font-bold">Ready to explore the phase diagram?</h2>
+                <p class="mt-2 text-lg text-slate-200">Change the conditions and watch the equilibrium respond.</p>
+            </div>
+            <a href="/simulation" class="shrink-0 rounded-md bg-[#c8741a] px-6 py-3.5 text-base font-bold text-[#10212e] hover:bg-[#e08a2c]">Open simulator</a>
+        </section>
+    </main>
+
+    <footer class="border-t border-[#10212e]/15 bg-[#eef3f3]">
+        <p class="mx-auto max-w-6xl px-5 py-6 text-sm text-[#4a5d6b] sm:px-8">VLE Lab. Vapor–liquid equilibrium, made visible.</p>
+    </footer>
+</body>
+</html>
